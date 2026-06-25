@@ -15,6 +15,7 @@
 body {
   margin: 0;
   min-width: 920px;
+  -webkit-app-region: drag;
 }
 
 button,
@@ -61,11 +62,16 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   padding: 34px 24px 24px;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .app-shell button,
 .app-shell input,
+.app-shell textarea,
+.app-shell select,
+.app-shell a,
+.app-shell .panel,
+.app-shell .adb-status,
 .app-shell .log-list,
 .app-shell .candidate-list,
 .app-shell pre {

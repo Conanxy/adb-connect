@@ -4,7 +4,7 @@ use std::{
     fs,
     io::{self, Read},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, ExitCode},
     time::Duration,
 };
@@ -294,20 +294,51 @@ fn discover_wireless_candidates() -> Vec<WirelessCandidate> {
 }
 
 fn resolve_adb_path(settings: &PersistedSettings) -> String {
-    settings
+    if let Some(path) = settings
         .adb_path
         .as_ref()
-        .filter(|path| !path.trim().is_empty())
-        .cloned()
-        .unwrap_or_else(|| "adb".to_string())
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+    {
+        return path.to_string();
+    }
+
+    find_adb_in_common_locations().unwrap_or_else(|| "adb".to_string())
 }
 
 fn adb_source(settings: &PersistedSettings, path: &str) -> String {
     if settings.adb_path.as_deref() == Some(path) {
         "手动指定".to_string()
-    } else {
+    } else if path == "adb" {
         "系统 PATH".to_string()
+    } else {
+        "自动发现".to_string()
     }
+}
+
+fn find_adb_in_common_locations() -> Option<String> {
+    let mut candidates = vec![
+        "/opt/homebrew/bin/adb".to_string(),
+        "/usr/local/bin/adb".to_string(),
+        "/opt/android-sdk/platform-tools/adb".to_string(),
+    ];
+
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(
+            home.join("Library/Android/sdk/platform-tools/adb")
+                .to_string_lossy()
+                .to_string(),
+        );
+        candidates.push(
+            home.join("Android/Sdk/platform-tools/adb")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    candidates
+        .into_iter()
+        .find(|path| Path::new(path).is_file())
 }
 
 fn settings_path() -> Result<PathBuf, String> {
