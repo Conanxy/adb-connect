@@ -2,6 +2,8 @@
   "name": "adb-connect-electron",
   "version": "0.1.0",
   "private": true,
+  "description": "ADB device connection manager",
+  "author": "Conanxy",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -11,7 +13,52 @@
     "build": "npm run build:native && tsc -p tsconfig.json && vite build && npm run build:electron",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/rename-electron-output.cjs",
     "build:native": "cargo build --manifest-path native-adb/Cargo.toml",
-    "test:native": "cargo test --manifest-path native-adb/Cargo.toml"
+    "build:native:release": "cargo build --release --manifest-path native-adb/Cargo.toml",
+    "test:native": "cargo test --manifest-path native-adb/Cargo.toml",
+    "package": "npm run build:native:release && tsc -p tsconfig.json && vite build && npm run build:electron && electron-builder --publish never",
+    "package:mac": "npm run build:native:release && tsc -p tsconfig.json && vite build && npm run build:electron && electron-builder --mac dmg --publish never",
+    "package:win": "npm run build:native:release && tsc -p tsconfig.json && vite build && npm run build:electron && electron-builder --win nsis msi --publish never"
+  },
+  "build": {
+    "appId": "com.conanxy.adbconnect",
+    "productName": "ADB Connect",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "extraResources": [
+        {
+          "from": "native-adb/target/release/adb-native",
+          "to": "native-adb/adb-native"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "msi"
+      ],
+      "extraResources": [
+        {
+          "from": "native-adb/target/release/adb-native.exe",
+          "to": "native-adb/adb-native.exe"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -27,6 +74,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "electron": "^33.2.1",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.6.3",
     "vite": "^6.0.1",
     "wait-on": "^8.0.1"

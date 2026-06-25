@@ -1,0 +1,73 @@
+name: Release Electron App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS DMG
+            os: macos-14
+            package-script: package:mac
+            artifact-name: adb-connect-macos
+            artifact-path: |
+              adb-connect-electron/release/*.dmg
+          - name: Windows EXE MSI
+            os: windows-latest
+            package-script: package:win
+            artifact-name: adb-connect-windows
+            artifact-path: |
+              adb-connect-electron/release/*.exe
+              adb-connect-electron/release/*.msi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: adb-connect-electron/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        working-directory: adb-connect-electron
+        run: npm ci
+
+      - name: Test Rust service
+        working-directory: adb-connect-electron
+        run: npm run test:native
+
+      - name: Package Electron app
+        working-directory: adb-connect-electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run ${{ matrix.package-script }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact-path }}

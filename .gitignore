@@ -6,6 +6,7 @@ src-tauri/gen
 adb-connect-electron/node_modules
 adb-connect-electron/dist
 adb-connect-electron/dist-electron
+adb-connect-electron/release
 adb-connect-electron/native-adb/target
 .serena
 .env
