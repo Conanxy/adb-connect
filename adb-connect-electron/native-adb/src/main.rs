@@ -129,6 +129,7 @@ fn run() -> Result<Value, String> {
         "disconnectDevice" => Ok(json!(disconnect_device(&settings, string_payload(&request, "serial")?)?)),
         "restartAdbServer" => Ok(json!(restart_adb_server(&settings)?)),
         "discoverWirelessCandidates" => Ok(json!(discover_wireless_candidates())),
+        "getLanIpPrefix" => Ok(json!(lan_ip_prefix())),
         "getSettings" => Ok(json!(Settings {
             adb_path: settings.adb_path
         })),
@@ -291,6 +292,11 @@ fn discover_wireless_candidates() -> Vec<WirelessCandidate> {
     }
 
     candidates
+}
+
+fn lan_ip_prefix() -> Option<String> {
+    let octets = local_ipv4()?.octets();
+    Some(format!("{}.{}.{}.", octets[0], octets[1], octets[2]))
 }
 
 fn resolve_adb_path(settings: &PersistedSettings) -> String {
@@ -667,7 +673,7 @@ fn human_error_message(error: &str) -> String {
 mod tests {
     use super::{
         create_qr_pairing_string, detect_transport, find_mdns_connect_service,
-        find_qr_pairing_service, mdns_guid, parse_devices, parse_mdns_connect_services,
+        find_qr_pairing_service, lan_ip_prefix, mdns_guid, parse_devices, parse_mdns_connect_services,
         parse_mdns_pairing_services, resolve_disconnect_target,
     };
 
@@ -687,6 +693,14 @@ mod tests {
     #[test]
     fn detects_usb_serials_as_usb() {
         assert_eq!(detect_transport("10CECK0QZ1000N0"), "usb");
+    }
+
+    #[test]
+    fn lan_ip_prefix_is_empty_or_ends_with_dot() {
+        if let Some(prefix) = lan_ip_prefix() {
+            assert!(prefix.ends_with('.'));
+            assert_eq!(prefix.matches('.').count(), 3);
+        }
     }
 
     #[test]

@@ -93,6 +93,7 @@ function App() {
   const [adbStatus, setAdbStatus] = React.useState<AdbStatus | null>(null);
   const [settings, setSettings] = React.useState<SettingsState>({});
   const [wirelessAddress, setWirelessAddress] = React.useState("");
+  const [lanIpPrefix, setLanIpPrefix] = React.useState("");
   const [pairAddress, setPairAddress] = React.useState("");
   const [pairingCode, setPairingCode] = React.useState("");
   const [adbPathInput, setAdbPathInput] = React.useState("");
@@ -172,6 +173,24 @@ function App() {
       qrPairingRunId.current += 1;
     };
   }, [refreshAll]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void nativeInvoke<string | null>("getLanIpPrefix")
+      .then((prefix) => {
+        if (!cancelled && prefix) {
+          setLanIpPrefix(prefix);
+          setWirelessAddress((current) => current || prefix);
+        }
+      })
+      .catch(() => {
+        // 局域网前缀只是输入辅助，失败时保持空输入即可。
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function cancelQrPairing(resetView = false) {
     qrPairingRunId.current += 1;
@@ -572,7 +591,7 @@ function App() {
               <div className="tool-section">
                 <label className="field flush">
                   <span>设备地址</span>
-                  <input placeholder="192.168.1.23:5555" value={wirelessAddress} onChange={(event) => setWirelessAddress(event.target.value)} />
+                  <input placeholder={`${lanIpPrefix || "192.168.1."}23:5555`} value={wirelessAddress} onChange={(event) => setWirelessAddress(event.target.value)} />
                 </label>
                 <ActionButton icon={<Wifi size={17} />} loading={loading.connect} label="连接" variant="primary" fullWidth onClick={() => void connectWireless()} />
               </div>
