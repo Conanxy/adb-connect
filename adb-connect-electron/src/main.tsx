@@ -181,6 +181,7 @@ function App() {
         if (!cancelled && prefix) {
           setLanIpPrefix(prefix);
           setWirelessAddress((current) => current || prefix);
+          setPairAddress((current) => current || prefix);
         }
       })
       .catch(() => {
@@ -601,7 +602,7 @@ function App() {
               <div className="tool-section">
                 <label className="field flush">
                   <span>配对地址</span>
-                  <input placeholder="192.168.1.23:37123" value={pairAddress} onChange={(event) => setPairAddress(event.target.value)} />
+                  <input placeholder={`${lanIpPrefix || "192.168.1."}23:37123`} value={pairAddress} onChange={(event) => setPairAddress(event.target.value)} />
                 </label>
                 <label className="field flush">
                   <span>配对码</span>

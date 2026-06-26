@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
+    cmp::Reverse,
     fs,
     io::{self, Read},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket},
@@ -630,11 +631,69 @@ fn normalize_address(address: &str, default_port: u16) -> Result<String, String>
 }
 
 fn local_ipv4() -> Option<Ipv4Addr> {
+    if let Some(ip) = local_lan_ipv4_from_interfaces() {
+        return Some(ip);
+    }
+
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
     match socket.local_addr().ok()?.ip() {
-        IpAddr::V4(ip) => Some(ip),
+        IpAddr::V4(ip) if is_preferred_lan_ipv4(ip) => Some(ip),
         IpAddr::V6(_) => None,
+        IpAddr::V4(_) => None,
+    }
+}
+
+fn local_lan_ipv4_from_interfaces() -> Option<Ipv4Addr> {
+    let output = if cfg!(target_os = "windows") {
+        Command::new("ipconfig").output().ok()?
+    } else {
+        Command::new("ifconfig").output().ok()?
+    };
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut candidates = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        for token in line.split_whitespace() {
+            let cleaned = token
+                .trim_start_matches("addr:")
+                .trim_matches(|character: char| !character.is_ascii_digit() && character != '.');
+            if let Ok(ip) = cleaned.parse::<Ipv4Addr>() {
+                if is_preferred_lan_ipv4(ip) {
+                    candidates.push(ip);
+                }
+            }
+        }
+    }
+
+    candidates.sort_by_key(|ip| Reverse(lan_ipv4_score(*ip)));
+    candidates.into_iter().next()
+}
+
+fn is_preferred_lan_ipv4(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    if ip.is_loopback() || ip.is_link_local() || ip.is_broadcast() || ip.is_multicast() || ip.is_unspecified() {
+        return false;
+    }
+
+    if octets[0] == 198 && (18..=19).contains(&octets[1]) {
+        return false;
+    }
+
+    ip.is_private()
+}
+
+fn lan_ipv4_score(ip: Ipv4Addr) -> u8 {
+    let octets = ip.octets();
+    if octets[0] == 192 && octets[1] == 168 {
+        30
+    } else if octets[0] == 10 {
+        20
+    } else if octets[0] == 172 && (16..=31).contains(&octets[1]) {
+        10
+    } else {
+        0
     }
 }
 
@@ -671,10 +730,13 @@ fn human_error_message(error: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::net::Ipv4Addr;
+
     use super::{
         create_qr_pairing_string, detect_transport, find_mdns_connect_service,
-        find_qr_pairing_service, lan_ip_prefix, mdns_guid, parse_devices, parse_mdns_connect_services,
-        parse_mdns_pairing_services, resolve_disconnect_target,
+        find_qr_pairing_service, is_preferred_lan_ipv4, lan_ip_prefix, lan_ipv4_score,
+        mdns_guid, parse_devices, parse_mdns_connect_services, parse_mdns_pairing_services,
+        resolve_disconnect_target,
     };
 
     #[test]
@@ -701,6 +763,20 @@ mod tests {
             assert!(prefix.ends_with('.'));
             assert_eq!(prefix.matches('.').count(), 3);
         }
+    }
+
+    #[test]
+    fn preferred_lan_ipv4_excludes_proxy_test_networks() {
+        assert!(is_preferred_lan_ipv4(Ipv4Addr::new(192, 168, 31, 25)));
+        assert!(is_preferred_lan_ipv4(Ipv4Addr::new(10, 0, 0, 5)));
+        assert!(!is_preferred_lan_ipv4(Ipv4Addr::new(198, 18, 0, 1)));
+        assert!(!is_preferred_lan_ipv4(Ipv4Addr::new(127, 0, 0, 1)));
+    }
+
+    #[test]
+    fn lan_ipv4_score_prefers_common_home_networks() {
+        assert!(lan_ipv4_score(Ipv4Addr::new(192, 168, 31, 25)) > lan_ipv4_score(Ipv4Addr::new(10, 0, 0, 5)));
+        assert!(lan_ipv4_score(Ipv4Addr::new(10, 0, 0, 5)) > lan_ipv4_score(Ipv4Addr::new(172, 16, 0, 5)));
     }
 
     #[test]
